@@ -290,26 +290,29 @@ def move_up_until_blocked_and_count_steps():
     print(f"{steps=}")
     return steps
 
-def advanced_mode_loop():
-    stop_position = settings.number_of_total_steps()
-    assert stop_position is not None
+def advanced_mode_loop(current_position: int | None):
+    # Steps to fully close/open the blind.
+    number_of_total_steps = settings.number_of_total_steps()
+    assert number_of_total_steps is not None
 
-    # Make sure we are at a know position by moving the blind up until it is blocked.
-    #
-    # Alternatively, this could be solved by storing the last known position
-    # in the settings. However, this value would be written each time the blind
-    # is operated, but only read rarely. Not sure whether this is worth writing
-    # that much to the flash memory.
-    move_up_until_blocked_and_count_steps()
-
-    # We are now at the top postion.
-    current_position = stop_position
+    if current_position is None:
+        # Make sure we are at a know position by moving the blind up until it is blocked.
+        #
+        # Alternatively, this could be solved by storing the last known position
+        # in the settings. However, this value would be written each time the blind
+        # is operated, but only read rarely. Not sure whether this is worth writing
+        # that much to the flash memory.
+        move_up_until_blocked_and_count_steps()
+        # We are now at the top postion since we moved there.
+        current_position = number_of_total_steps
 
     while True:
         # TODO: Add support for events coming via MQTT.
         button_event = buttons.poll_button_event()
 
-        # TODO: Support for incremental movements.
+        # TODO: Incremental movements.
+        # TODO: Reset device key combination.
+        # TODO: Allow to cancel ongoing movements.
         if button_event == ButtonEvent.UP:
             if current_position == 0:
                 blind.up()
@@ -323,11 +326,11 @@ def advanced_mode_loop():
                         blind.stop()
                         while True:
                             pass
-                    if current_position == stop_position:
+                    if current_position == number_of_total_steps:
                         blind.stop()
                         break
         elif button_event == ButtonEvent.DOWN:
-            if current_position == stop_position:
+            if current_position == number_of_total_steps:
                 blind.down()
                 while True:
                     ret = rotation_sensor.wait_for_sync_position(3000)
@@ -348,6 +351,9 @@ def advanced_mode_loop():
 number_of_total_steps = settings.number_of_total_steps()
 print(f"{number_of_total_steps=}")
 
+# On start-up unknown.
+current_position = None
+
 if number_of_total_steps is None:
     basic_mode_loop()
     # if the basic mode is exited, the user request calibration.
@@ -355,7 +361,9 @@ if number_of_total_steps is None:
     # is fully open/closed.
     number_of_total_steps = move_up_until_blocked_and_count_steps()
     settings.set_number_of_total_steps(number_of_total_steps)
+    # We just estimated the value, thus we now our current position.
+    current_position = number_of_total_steps
 
 # If we know the number of steps required to close/open the blind we can
 # enter the advanced mode.
-advanced_mode_loop()
+advanced_mode_loop(current_position)
